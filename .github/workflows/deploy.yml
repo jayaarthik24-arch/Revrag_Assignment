@@ -1,0 +1,45 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Checkout code
+        uses: actions/checkout@v4   # updated to latest stable
+
+      - name: Build Docker image
+        run: docker build -t myuser/myapp:latest .
+
+      # Vulnerability Scan Step
+      - name: Run Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          image-ref: myapp:latest
+          format: 'table'
+          severity: 'CRITICAL'
+          exit-code: '1'              # fail pipeline if CRITICAL CVEs found
+          output: 'trivy-report.txt'
+
+      - name: Upload Trivy report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report
+          path: trivy-report.txt
+
+ # Placed the vulnerability check after the image build and before the docker push to avoid any chances of risking the impact on the security of the other resources deployed on the infrastructure
+ # The trivy report is stored on the artifactory for further reference.
+
+      - name: Push to Docker Hub
+        run: |
+          echo "${{ secrets.DOCKER_HUB_PASSWORD }}" | docker login -u myuser --password-stdin
+          docker push myuser/myapp:latest
+
+      - name: Deploy to production
+        run: |
+          ssh -o StrictHostKeyChecking=no deploy@${{ secrets.SERVER_IP }} \
+            "docker pull myapp:latest && docker run -d -p 80:3000 myuser/myapp:latest"
