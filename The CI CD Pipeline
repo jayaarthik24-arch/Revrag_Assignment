@@ -1,0 +1,57 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [ main ]
+
+env:
+  DOCKER_HUB_PASSWORD: "p@ssw0rd_docker_123"            # ⚠ issue
+  AWS_SECRET_ACCESS_KEY: "wJalrXUtnFEMI/K7MDENG/bPxRfiCY"  # ⚠ issue  Password and the secret aren’t supposed to be kept openly. It is advised to use the environmental variable or docker file.
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Checkout code
+        uses: actions/checkout@v3                        # ⚠ issue   it’s better to mention the latest version
+
+      - name: Build Docker image
+        run: docker build -t myapp:latest .
+
+      - name: Push to Docker Hub
+        run: |
+          echo "$DOCKER_HUB_PASSWORD" | docker login -u myuser --password-stdin
+          docker push myapp:latest                       # ⚠ issue   it doesn’t say push to which source exactly.
+
+      - name: Deploy to production
+        run: |
+          ssh -o StrictHostKeyChecking=no deploy@${{ secrets.SERVER_IP }} \
+            "docker pull myapp:latest && docker run -d --privileged -p 80:3000 myapp:latest"  # ⚠ issue   using –privileged is risky as it gives control of the host machine to the container where the app is installed
+
+Answer:
+name: Build and Deploy
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+steps:
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t myuser/myapp:latest .
+
+      - name: Push to Docker Hub
+        run: |
+          echo "${{ secrets.DOCKER_HUB_PASSWORD }}" | docker login -u myuser --password-stdin
+          docker push myuser/myapp:latest
+
+      - name: Deploy to production
+        run: |
+          ssh -o StrictHostKeyChecking=no deploy@${{ secrets.SERVER_IP }} \
+            "docker pull myuser/myapp:latest && docker run -d -p 80:3000 myuser/myapp:latest"
